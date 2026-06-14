@@ -1,7 +1,10 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import requests
 import matplotlib.pyplot as plt
+from streamlit_autorefresh import st_autorefresh
+
 
 # -----------------------------
 # Page Configuration
@@ -11,6 +14,26 @@ st.set_page_config(
     page_icon="🌱",
     layout="wide"
 )
+# Raspberry Pi API address
+PI_API = "http://172.17.72.5:5000/data"
+
+
+def get_live_sensor_data():
+    try:
+        response = requests.get(PI_API, timeout=2)
+
+        if response.status_code == 200:
+            return response.json()
+
+    except Exception:
+        pass
+
+    return None
+st_autorefresh(
+    interval=20000,
+    key="sensor_refresh"
+)
+
 # -----------------------------
 # Sidebar
 # -----------------------------
@@ -68,27 +91,64 @@ st.markdown("### AI + IoT Based Irrigation Recommendation System")
 
 st.divider()
 
+
 # -----------------------------
-# Sensor Section
+# Live Sensor Data
 # -----------------------------
 st.header("📡 Live Sensor Data")
 
+sensor = get_live_sensor_data()
+if sensor:
+    live_temperature = sensor["temperature"]
+    live_humidity = sensor["humidity"]
+    live_soil = sensor["soil"]
+    live_rain = sensor["rain"]
+
+else:
+    live_temperature = 0
+    live_humidity = 0
+    live_soil = "UNKNOWN"
+    live_rain = "UNKNOWN"
+
 col1, col2, col3, col4 = st.columns(4)
 
-with col1:
-    st.metric("Temperature", "30°C")
 
-with col2:
-    st.metric("Humidity", "65%")
+if sensor:
 
-with col3:
-    st.metric("Soil Status", "Dry")
+    with col1:
+        temp = sensor["temperature"]
 
-with col4:
-    st.metric("Rain Status", "No Rain")
+        st.metric(
+            "Temperature",
+            f"{temp} °C" if temp is not None else "N/A"
+        )
 
-st.divider()
+    with col2:
+        hum = sensor["humidity"]
 
+        st.metric(
+            "Humidity",
+            f"{hum} %" if hum is not None else "N/A"
+        )
+
+    with col3:
+        st.metric(
+            "Soil Status",
+            sensor["soil"]
+        )
+
+    with col4:
+        st.metric(
+            "Rain Status",
+            sensor["rain"]
+        )
+
+    st.caption(
+        "Last Update: " + sensor["timestamp"]
+    )
+
+else:
+    st.error("Cannot connect to Raspberry Pi API")
 # -----------------------------
 # Crop Information
 # -----------------------------
@@ -154,7 +214,7 @@ with col2:
         "Temperature (°C)",
         min_value=0.0,
         max_value=60.0,
-        value=30.0
+        value=float(live_temperature) if live_temperature is not None else 0.0
     )
 
 with col3:
@@ -162,7 +222,7 @@ with col3:
         "Humidity (%)",
         min_value=0.0,
         max_value=100.0,
-        value=65.0
+        value=float(live_humidity) if live_humidity is not None else 0.0
     )
 
 st.divider()
